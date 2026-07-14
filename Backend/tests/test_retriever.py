@@ -1,6 +1,6 @@
 # Location: tests/test_retriever.py
 import pytest
-from app.services.retriever import ParallelHybridRetriever # Assuming this is your class name
+from app.services.retriever import HybridRetrieverController # Assuming this is your class name
 from app.graph.state import AgenticOpsState
 
 def test_hybrid_retrieval_with_expanded_state():
