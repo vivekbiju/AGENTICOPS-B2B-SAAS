@@ -8,7 +8,7 @@ def test_hybrid_retrieval_with_expanded_state():
     
     # 1. Initialize the retriever service
     # (If your retriever requires structural config or client connections, inject it here)
-    retriever = ParallelHybridRetriever()
+    retriever = HybridRetrieverController()
     
     # 2. Build the Phase 3 compliant state payload
     mock_state: AgenticOpsState = {
