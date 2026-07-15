@@ -16,19 +16,14 @@ from pydantic import BaseModel, Field
 
 # 2. Now import settings and your graph safely
 from app.core.config import settings
-from app.graph.workflow import app_graph
+from app.graph.workflow import app as app_graph # Import compiled app safely with checkpointer
 from app.graph.state import AgenticOpsState
 
 app = FastAPI(
     title="AgenticOps Core Streaming Microservice",
     version="1.0.0",
-    description="Production Phase 4 asynchronous graph execution and telemetry interface."
+    description="Production Phase 4/7 asynchronous graph execution, telemetry, and HITL interface."
 )
-
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,18 +33,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- REQUEST/RESPONSE SCHEMAS ---
+
 class StreamRequest(BaseModel):
     account_id: str = Field(..., example="acc_2026_99x")
     raw_issue_input: str = Field(..., example="High latency errors surfacing on the historical payment processing cluster.")
+    thread_id: str = Field(default="default-thread", description="Unique session identifier for checking state memory.")
 
-async def transform_graph_stream(account_id: str, raw_issue_input: str) -> AsyncGenerator[str, None]:
+class ApprovalRequest(BaseModel):
+    thread_id: str = Field(..., description="Unique thread ID for the paused execution.")
+    approved: bool = Field(..., description="True to resume execution, False to terminate.")
+    feedback: str = Field(default="", description="Optional feedback or rejection justification to log.")
+
+
+# --- CORE SSE STREAM GENERATOR ---
+
+async def transform_graph_stream(account_id: str, raw_issue_input: str, thread_id: str) -> AsyncGenerator[str, None]:
     """
-    Executes the compiled LangGraph asynchronously, captures operational events,
-    and yields strictly structured SSE chunks detailing execution segments.
-    
-    If the underlying LLM does not stream native tokens, this stream handler 
-    simulates a high-speed token stream using the completed response to ensure
-    the frontend UI streams the text seamlessly.
+    Executes the compiled LangGraph asynchronously with state preservation checkpointers,
+    captures operational events, and yields structured SSE chunks detailing execution segments.
     """
     initial_state = {
         "account_id": account_id,
@@ -65,10 +67,11 @@ async def transform_graph_stream(account_id: str, raw_issue_input: str) -> Async
     }
 
     try:
+        # Pass the configurable thread_id config block to keep checkpoint execution isolated
         event_stream = app_graph.astream_events(
             initial_state, 
             version="v2",
-            config={"configurable": {"account_id": account_id}}
+            config={"configurable": {"thread_id": thread_id}}
         )
         
         async for event in event_stream:
@@ -121,7 +124,7 @@ async def transform_graph_stream(account_id: str, raw_issue_input: str) -> Async
 
                         yield f"data: {json.dumps(payload)}\n\n"
 
-                        # --- STREAM SIMULATOR: Splits by line and injects explicit frontend [BREAK] handles ---
+                        # Stream recommendations text if generated
                         recommendations = node_output.get("generated_recommendations", "")
                         if recommendations:
                             lines = recommendations.replace("\r\n", "\n").split("\n")
@@ -139,7 +142,7 @@ async def transform_graph_stream(account_id: str, raw_issue_input: str) -> Async
                                     yield f"data: {json.dumps(token_payload)}\n\n"
                                     await asyncio.sleep(0.01)
                                 
-                                # Appends a custom structural separation token to split bullet rows cleanly
+                                # Appends custom structural separation token to split bullet rows cleanly
                                 if r_idx < len(lines) - 1:
                                     token_payload = {
                                         "event": "token",
@@ -176,13 +179,16 @@ async def transform_graph_stream(account_id: str, raw_issue_input: str) -> Async
         }
         yield f"data: {json.dumps(error_payload)}\n\n"
 
+
+# --- HTTP GATEWAY ENDPOINTS ---
+
 @app.post("/api/v1/agent/stream")
 async def stream_agent_pipeline(request: StreamRequest):
     if not request.account_id or not request.raw_issue_input:
         raise HTTPException(status_code=400, detail="Missing baseline structural targets.")
 
     return StreamingResponse(
-        transform_graph_stream(request.account_id, request.raw_issue_input),
+        transform_graph_stream(request.account_id, request.raw_issue_input, request.thread_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -190,6 +196,64 @@ async def stream_agent_pipeline(request: StreamRequest):
             "X-Accel-Buffering": "no"
         }
     )
+
+@app.get("/api/v1/agent/paused-state/{thread_id}")
+async def get_paused_state(thread_id: str):
+    """
+    Fetches details of a paused workflow to let the frontend dashboard inspect
+    logs and confirm wait state statuses.
+    """
+    config = {"configurable": {"thread_id": thread_id}}
+    state_snapshot = app_graph.get_state(config)
+    
+    if not state_snapshot.next:
+        return {
+            "status": "active", 
+            "message": "No active checkpoint pauses or pending interrupts on this thread."
+        }
+        
+    return {
+        "status": "paused",
+        "pending_node": state_snapshot.next,
+        "current_state_values": state_snapshot.values
+    }
+
+@app.post("/api/v1/agent/approve")
+async def resume_workflow(request: ApprovalRequest):
+    """
+    Resumes a paused workflow run on approval, or updates state logs with comments on rejection.
+    """
+    config = {"configurable": {"thread_id": request.thread_id}}
+    
+    if not request.approved:
+        # Update thread state logs to capture manual rejection context
+        app_graph.update_state(
+            config,
+            {
+                "generated_recommendations": f"Execution rejected by Administrator. Reason: {request.feedback}",
+                "agent_logs": [f"Admin Override: Rejected execution thread. Reason: '{request.feedback}'"]
+            },
+            as_node="human_approval_gate"
+        )
+        return {"status": "rejected", "message": "Workflow execution aborted via admin override."}
+    
+    print(f"🚀 Administrator approved thread {request.thread_id}. Resuming execution...")
+    
+    # Update execution audit logs if approval feedback is supplied
+    if request.feedback:
+        app_graph.update_state(
+            config,
+            {"agent_logs": [f"Admin Approved Action: {request.feedback}"]},
+            as_node="human_approval_gate"
+        )
+        
+    # Resume execution by invoking with None, signaling the checkpointer to proceed past the interrupt node
+    final_state = app_graph.invoke(None, config)
+    
+    return {
+        "status": "completed",
+        "generated_recommendations": final_state.get("generated_recommendations")
+    }
 
 @app.get("/")
 async def root_ping():
