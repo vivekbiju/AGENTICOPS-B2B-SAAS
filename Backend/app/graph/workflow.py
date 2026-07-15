@@ -1,5 +1,6 @@
 # Location: backend/app/graph/workflow.py
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver # Added for state preservation
 from app.graph.state import AgenticOpsState
 from app.graph.agents.classifier import IssueClassifierAgent
 from app.graph.agents.researcher import IssueResearcherAgent
@@ -13,9 +14,13 @@ researcher_agent = IssueResearcherAgent()
 risk_analyst_agent = RiskAnalystAgent()
 auditor_agent = AuditorAgent()
 
+
 # 2. Define the Router function to handle dynamic workflow orchestration
 def router_logic(state: AgenticOpsState) -> str:
-    """Evaluates the routing_decision token in the state to determine the next node."""
+    """
+    Evaluates the routing_decision token in the state to determine the next node.
+    Integrates Human-in-the-Loop policy rules for high-risk exit paths.
+    """
     decision = state.get("routing_decision")
     
     if decision == "RESEARCHER":
@@ -28,14 +33,36 @@ def router_logic(state: AgenticOpsState) -> str:
         return "researcher"  # Route back to researcher for cyclical loop
     elif decision == "ERROR_HANDLER" or decision == "FORCE_END":
         return "error_cleanup"
-    else:
-        return END
+    
+    # If the system is ready to output and exit, check HITL Governance Policies
+    urgency = state.get("extracted_parameters", {}).get("urgency", "low").lower()
+    category = state.get("extracted_parameters", {}).get("category", "").lower()
+    
+    # Intercept exit if the issue is high urgency or targets core infrastructure/security
+    if urgency == "high" or category in ["infrastructure", "security"]:
+        print("🚨 High-risk signature detected. Routing execution to Human Approval Gate...")
+        return "human_approval_gate"
+        
+    return END
+
 
 def error_cleanup_node(state: AgenticOpsState):
     """Fallback node to gracefully handle execution failures or forced overrides within the network."""
     return {
         "agent_logs": ["[Workflow Supervisor] Router caught an operational exception or safety stop. Short-circuiting execution."]
     }
+
+
+def human_approval_gate(state: AgenticOpsState):
+    """
+    This node acts as an isolated state checkpoint. 
+    The workflow is configured to pause BEFORE entering this node.
+    """
+    print("⏳ System paused at Human-in-the-Loop Gate. Awaiting engineer authorization...")
+    return {
+        "agent_logs": ["[HITL Gate] Workflow paused. System awaiting administrator authorization."]
+    }
+
 
 # 3. Assemble and build the LangGraph StateGraph
 workflow = StateGraph(AgenticOpsState)
@@ -46,6 +73,7 @@ workflow.add_node("researcher", researcher_agent.research_historical_context)
 workflow.add_node("risk_analyst", risk_analyst_agent.analyze_account_risk)
 workflow.add_node("auditor", auditor_agent.audit_recommendations)
 workflow.add_node("error_cleanup", error_cleanup_node)
+workflow.add_node("human_approval_gate", human_approval_gate) # Register the HITL gate node
 
 # Set the structural entrypoint of the graph boundary
 workflow.set_entry_point("classifier")
@@ -87,12 +115,23 @@ workflow.add_conditional_edges(
     {
         "researcher": "researcher",      # Sends it back on hallucination flag
         "error_cleanup": "error_cleanup",  # Catches FORCE_END (max loops reached)
+        "human_approval_gate": "human_approval_gate", # Routes to approval gate if high risk
         END: END
     }
 )
 
 # Connect terminal paths
 workflow.add_edge("error_cleanup", END)
+workflow.add_edge("human_approval_gate", END) # Once approved, exit cleanly to END
 
-# Compile the graph into an executable application layer component
-app_graph = workflow.compile()
+# 4. Compile the Graph with Memory and State Interrupts
+memory = MemorySaver()
+
+# We instruct LangGraph to suspend execution right before entering our manual gate
+app = workflow.compile(
+    checkpointer=memory,
+    interrupt_before=["human_approval_gate"]
+)
+
+# Keep both references active to support backward compatibility with evaluation scripts
+app_graph = app
