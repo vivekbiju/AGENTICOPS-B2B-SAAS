@@ -29,6 +29,8 @@ export function useAgentStream() {
   const [riskAnalysis, setRiskAnalysis] = useState<RiskAnalysis | null>(null);
   const [sources, setSources] = useState<SourceFragment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [requiresApproval, setRequiresApproval] = useState<boolean>(false);
+  const [threadId, setThreadId] = useState<string>("");
 
   const startStream = useCallback(async (accountId: string, issueInput: string) => {
     setIsStreaming(true);
@@ -37,12 +39,16 @@ export function useAgentStream() {
     setRiskAnalysis(null);
     setSources([]);
     setError(null);
+    setRequiresApproval(false); // Reset approval state on a fresh run
 
     try {
+      const generatedThreadId = `session-${accountId}`;
+      setThreadId(generatedThreadId); // Store it in hook state so page.tsx can access it
+
       const response = await fetch('http://localhost:8000/api/v1/agent/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accountId, raw_issue_input: issueInput }),
+        body: JSON.stringify({ account_id: accountId, raw_issue_input: issueInput, thread_id: generatedThreadId }),
       });
 
       if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
@@ -80,6 +86,11 @@ export function useAgentStream() {
                 if (parsed.sources) setSources(parsed.sources);
                 if (parsed.risk_analysis) setRiskAnalysis(parsed.risk_analysis);
                 break;
+              case 'workflow_paused': // <-- ADDED CASE FOR HITL POLICY INTERVENTION
+                setIsStreaming(false);
+                setRequiresApproval(true);
+                if (parsed.thread_id) setThreadId(parsed.thread_id);
+                break;
               case 'workflow_end':
                 setIsStreaming(false);
                 break;
@@ -99,5 +110,17 @@ export function useAgentStream() {
     }
   }, []);
 
-  return { isStreaming, streamText, logs, riskAnalysis, sources, error, startStream };
+  return { 
+    isStreaming, 
+    streamText, 
+    logs, 
+    riskAnalysis, 
+    sources, 
+    error, 
+    startStream, 
+    requiresApproval, 
+    setRequiresApproval, 
+    threadId, 
+    setThreadId  
+  };
 }

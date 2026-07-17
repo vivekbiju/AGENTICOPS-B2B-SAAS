@@ -168,6 +168,19 @@ async def transform_graph_stream(account_id: str, raw_issue_input: str, thread_i
 
             await asyncio.sleep(0.001)
 
+        # --- HITL PAUSE DETECTION BLOCK ---
+        # After the internal stream finishes processing events, inspect if the graph checkpointer 
+        # is holding a paused state specifically waiting for human approval.
+        state_snapshot = app_graph.get_state({"configurable": {"thread_id": thread_id}})
+        if state_snapshot.next and "human_approval_gate" in state_snapshot.next:
+            print(f"📡 Broadcasting manual approval suspension event on thread '{thread_id}' to the client.")
+            yield f"data: {json.dumps({
+                'event': 'workflow_paused', 
+                'node': 'human_approval_gate', 
+                'thread_id': thread_id, 
+                'message': 'Manual engineer approval required before deploying mitigation playbook recommendations.'
+            })}\n\n"
+
     except Exception as e:
         print("\n❌ CRITICAL GRAPH EXECUTION EXCEPTION DETECTED:")
         traceback.print_exc()

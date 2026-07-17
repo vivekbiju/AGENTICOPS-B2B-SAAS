@@ -16,13 +16,28 @@ auditor_agent = AuditorAgent()
 
 
 # 2. Define the Router function to handle dynamic workflow orchestration
+# Update in backend/app/graph/workflow.py
+
 def router_logic(state: AgenticOpsState) -> str:
     """
     Evaluates the routing_decision token in the state to determine the next node.
-    Integrates Human-in-the-Loop policy rules for high-risk exit paths.
+    Integrates robust, case-insensitive Human-in-the-Loop policy rules for high-risk paths.
     """
-    decision = state.get("routing_decision")
+    decision = state.get("routing_decision", "")
     
+    # 1. Normalize classification parameters for robust evaluation
+    urgency = str(state.get("extracted_parameters", {}).get("urgency", "low")).strip().lower()
+    category = str(state.get("extracted_parameters", {}).get("category", "")).strip().lower()
+    
+    # 2. Check HITL Governance Policies BEFORE exiting or entering error paths
+    is_high_risk = urgency in ["high", "critical"] or category in ["infrastructure", "security"]
+    
+    # If the workflow is ending or entering an error cleanup path, but it's high-risk, force a pause
+    if is_high_risk and (decision in ["ERROR_HANDLER", "FORCE_END"] or decision not in ["RESEARCHER", "RISK_ANALYST", "AUDITOR", "RE_RESEARCH"]):
+        print(f"🚨 High-risk signature detected (Urgency: {urgency}, Category: {category}). Overriding decision '{decision}' to Human Approval Gate...")
+        return "human_approval_gate"
+
+    # 3. Standard fallback routing logic
     if decision == "RESEARCHER":
         return "researcher"
     elif decision == "RISK_ANALYST":
@@ -33,18 +48,8 @@ def router_logic(state: AgenticOpsState) -> str:
         return "researcher"  # Route back to researcher for cyclical loop
     elif decision == "ERROR_HANDLER" or decision == "FORCE_END":
         return "error_cleanup"
-    
-    # If the system is ready to output and exit, check HITL Governance Policies
-    urgency = state.get("extracted_parameters", {}).get("urgency", "low").lower()
-    category = state.get("extracted_parameters", {}).get("category", "").lower()
-    
-    # Intercept exit if the issue is high urgency or targets core infrastructure/security
-    if urgency == "high" or category in ["infrastructure", "security"]:
-        print("🚨 High-risk signature detected. Routing execution to Human Approval Gate...")
-        return "human_approval_gate"
-        
-    return END
-
+    else:
+        return END
 
 def error_cleanup_node(state: AgenticOpsState):
     """Fallback node to gracefully handle execution failures or forced overrides within the network."""

@@ -28,10 +28,10 @@ const RagasMetricsBadge: React.FC<RagasMetricsBadgeProps> = ({ precision, faithf
         ) : isStreaming ? (
           <span className="text-indigo-400 font-bold mt-0.5 animate-pulse">Calculating...</span>
         ) : (
-          <span className="text-slate-600 font-medium mt-0.5">Awaiting Run</span>
+          <span className="text-slate-200 font-medium mt-0.5">Awaiting Run</span>
         )}
       </div>
-      <div className="w-px h-6 bg-slate-850" />
+      <div className="w-px h-6 bg-slate-800" />
       <div className="flex flex-col">
         <span className="text-slate-500 text-[9px] uppercase tracking-wider">Faithfulness (Live)</span>
         {faithfulness !== null ? (
@@ -41,7 +41,7 @@ const RagasMetricsBadge: React.FC<RagasMetricsBadgeProps> = ({ precision, faithf
         ) : isStreaming ? (
           <span className="text-indigo-400 font-bold mt-0.5 animate-pulse">Calculating...</span>
         ) : (
-          <span className="text-slate-600 font-medium mt-0.5">Awaiting Run</span>
+          <span className="text-slate-200 font-medium mt-0.5">Awaiting Run</span>
         )}
       </div>
     </div>
@@ -53,16 +53,57 @@ const RagasMetricsBadge: React.FC<RagasMetricsBadgeProps> = ({ precision, faithf
 // ==========================================
 
 export default function AgenticOpsDashboard() {
-  const { isStreaming, streamText, logs, riskAnalysis, sources, error, startStream } = useAgentStream();
+  const { 
+    isStreaming, 
+    streamText, 
+    logs, 
+    riskAnalysis, 
+    sources, 
+    error, 
+    startStream,
+    requiresApproval,
+    setRequiresApproval,
+    threadId
+  } = useAgentStream();
+
   const [accountId, setAccountId] = useState('acc_2026_99x');
   const [issueInput, setIssueInput] = useState('High latency errors surfacing on the historical payment processing cluster.');
+  const [manualResolutionText, setManualResolutionText] = useState<string | null>(null);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedFragment, setSelectedFragment] = useState<SourceFragment | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  // Exposes action payload dispatch down onto endpoint paths on approve or reject state adjustments
+  const handleAction = async (isApproved: boolean) => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/agent/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          approved: isApproved,
+          feedback: isApproved ? "Authorized via UI Dashboard" : "Rejected via UI Dashboard"
+        })
+      });
+      
+      const result = await res.json();
+      if (result.status === "completed") {
+        // Appends the updated output parameters derived upon post-evaluation
+        setManualResolutionText(result.generated_recommendations);
+      } else {
+        setManualResolutionText(`❌ Execution rejected by administrator override.`);
+      }
+    } catch (err) {
+      console.error("Failed to post authorization gate selection event:", err);
+    } finally {
+      setRequiresApproval(false);
+    }
+  };
+
   // Derives which agent is actively executing based on the active stream states
   const getActiveAgentNode = (): AgentNode => {
+    if (requiresApproval) return 'AUDITOR'; // Anchor visually on audit step if wait states halt loop execution
     if (!isStreaming) return 'IDLE';
     if (streamText.length > 0) return 'AUDITOR';
     if (riskAnalysis) return 'AUDITOR';
@@ -73,17 +114,12 @@ export default function AgenticOpsDashboard() {
 
   const activeAgentNode = getActiveAgentNode();
 
-  // -------------------------------------------------------------
   // Dynamic evaluation simulation based on real-time stream data
-  // -------------------------------------------------------------
   const getLiveMetrics = () => {
     if (!isStreaming && !riskAnalysis && (!sources || sources.length === 0)) {
       return { precision: null, faithfulness: null };
     }
 
-    // 1. Dynamic Context Precision Engine
-    // Tallies how many significant keywords from the unstructured log input 
-    // are physically present inside your retrieved Elasticsearch vector fragments.
     let livePrecision = null;
     if (sources && sources.length > 0 && issueInput) {
       const inputKeywords = issueInput
@@ -102,14 +138,10 @@ export default function AgenticOpsDashboard() {
       });
 
       const ratio = totalMatchedSources / sources.length;
-      // Normalizes and introduces tiny variations based on the string lengths
       const lengthSalt = (issueInput.length % 5) * 0.005;
       livePrecision = 0.82 + (ratio * 0.15) + lengthSalt; 
     }
 
-    // 2. Dynamic Faithfulness Engine
-    // Determines text anchoring by computing token subset overlaps between 
-    // the generated playbook string and the retrieved reference documentation.
     let liveFaithfulness = null;
     if (riskAnalysis && streamText.length > 0) {
       const sourceWords = new Set(
@@ -129,14 +161,12 @@ export default function AgenticOpsDashboard() {
         const anchoredWords = playbookWords.filter(word => sourceWords.has(word)).length;
         const anchoringRatio = playbookWords.length > 0 ? (anchoredWords / playbookWords.length) : 0;
         
-        // Maps the overlap metric cleanly to a realistic benchmark range
         const scoreModifier = (riskAnalysis.health_score % 7) * 0.008; 
         liveFaithfulness = 0.75 + (anchoringRatio * 0.15) + scoreModifier;
       } else {
         liveFaithfulness = 0.7650;
       }
     } else if (isStreaming && streamText.length > 0) {
-      // Temporary placeholder state while text is streaming out through the SSE pipeline
       liveFaithfulness = 0.8150;
     }
 
@@ -157,6 +187,7 @@ export default function AgenticOpsDashboard() {
   const handleTriggerPipeline = (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId.trim() || !issueInput.trim()) return;
+    setManualResolutionText(null); // Clear out manual adjustments on a fresh submission path
     startStream(accountId, issueInput);
   };
 
@@ -174,7 +205,7 @@ export default function AgenticOpsDashboard() {
           <RagasMetricsBadge 
             precision={precision} 
             faithfulness={faithfulness} 
-            isStreaming={isStreaming} 
+            isStreaming={isStreaming || requiresApproval} 
           />
         </header>
 
@@ -190,7 +221,7 @@ export default function AgenticOpsDashboard() {
                   value={accountId} 
                   onChange={(e) => setAccountId(e.target.value)} 
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" 
-                  disabled={isStreaming} 
+                  disabled={isStreaming || requiresApproval} 
                 />
               </div>
               <div>
@@ -200,20 +231,22 @@ export default function AgenticOpsDashboard() {
                   value={issueInput} 
                   onChange={(e) => setIssueInput(e.target.value)} 
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors" 
-                  disabled={isStreaming} 
+                  disabled={isStreaming || requiresApproval} 
                 />
               </div>
               <button 
                 type="submit" 
-                disabled={isStreaming} 
+                disabled={isStreaming || requiresApproval} 
                 className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/50 disabled:text-slate-400 text-white font-semibold text-sm py-2.5 rounded-lg transition-colors shadow-lg shadow-indigo-950/40"
               >
-                {isStreaming ? 'Executing Pipeline...' : 'Deploy Request'}
+                {isStreaming ? 'Executing Pipeline...' : requiresApproval ? 'Awaiting Manual Approval' : 'Deploy Request'}
               </button>
             </form>
 
             {/* Step-by-Step Agent Stepper Node Pipeline tracking state in real-time */}
-            <AgentStepper activeAgent={isStreaming ? activeAgentNode : 'IDLE'} />
+            <button className="w-full text-left focus:outline-none cursor-default">
+              <AgentStepper activeAgent={activeAgentNode} />
+            </button>
 
             {/* Dynamic visual health score gauge chart */}
             <HealthMetrics data={riskAnalysis} />
@@ -229,6 +262,35 @@ export default function AgenticOpsDashboard() {
                 ❌ {error}
               </div>
             )}
+
+            {/* --- JSX SECURITY INTERVENTION GATE BANNER --- */}
+            {requiresApproval && (
+              <div className="bg-yellow-950/40 border border-yellow-600/50 p-5 rounded-xl flex flex-col gap-3 shadow-xl animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  <h3 className="text-yellow-400 font-bold text-base tracking-tight">Security Gate Intervention Required</h3>
+                </div>
+                <p className="text-slate-300 text-xs leading-relaxed">
+                  This execution pipeline contains active high-risk infrastructure or security signatures. 
+                  Please manually evaluate the current parameters and logs via the dashboard timeline before authorizing a deployment strategy.
+                </p>
+                <div className="flex gap-3 mt-1.5">
+                  <button 
+                    onClick={() => handleAction(true)} 
+                    className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-all shadow-md shadow-emerald-950/30"
+                  >
+                    Approve & Deploy Playbook
+                  </button>
+                  <button 
+                    onClick={() => handleAction(false)} 
+                    className="bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-all shadow-md shadow-rose-950/30"
+                  >
+                    Reject & Terminate Execution
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 min-h-[460px] shadow-lg">
               <div className="border-b border-slate-850 pb-3 mb-4 flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Playbook Recommendations</span>
@@ -239,7 +301,10 @@ export default function AgenticOpsDashboard() {
                   </span>
                 )}
               </div>
-              <TokenRenderer text={streamText} onCitationClick={handleCitationClick} />
+              <TokenRenderer 
+                text={manualResolutionText || streamText} 
+                onCitationClick={handleCitationClick} 
+              />
             </div>
           </section>
 
