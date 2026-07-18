@@ -174,12 +174,15 @@ async def transform_graph_stream(account_id: str, raw_issue_input: str, thread_i
         state_snapshot = app_graph.get_state({"configurable": {"thread_id": thread_id}})
         if state_snapshot.next and "human_approval_gate" in state_snapshot.next:
             print(f"📡 Broadcasting manual approval suspension event on thread '{thread_id}' to the client.")
-            yield f"data: {json.dumps({
-                'event': 'workflow_paused', 
-                'node': 'human_approval_gate', 
-                'thread_id': thread_id, 
+            # Broadcast the manual approval suspension event cleanly
+            paused_data = {
+                'event': 'workflow_paused',
+                'node': 'human_approval_gate',
+                'thread_id': thread_id,
                 'message': 'Manual engineer approval required before deploying mitigation playbook recommendations.'
-            })}\n\n"
+            }
+            yield f"data: {json.dumps(paused_data)}\n\n"
+            
 
     except Exception as e:
         print("\n❌ CRITICAL GRAPH EXECUTION EXCEPTION DETECTED:")
