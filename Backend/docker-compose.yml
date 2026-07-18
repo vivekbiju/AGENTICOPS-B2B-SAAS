@@ -24,7 +24,7 @@ services:
   # FastAPI + LangGraph Application Layer
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: agenticops_backend
     restart: always
