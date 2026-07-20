@@ -43,9 +43,12 @@ export function useAgentStream() {
 
     try {
       const generatedThreadId = `session-${accountId}`;
-      setThreadId(generatedThreadId); // Store it in hook state so page.tsx can access it
+      setThreadId(generatedThreadId);
 
-      const response = await fetch('http://localhost:8000/api/v1/agent/stream', {
+      // 🛠️ Updated to use environment variables dynamically
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://44.198.188.31:8000";
+
+      const response = await fetch(`${baseUrl}/api/v1/agent/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_id: accountId, raw_issue_input: issueInput, thread_id: generatedThreadId }),

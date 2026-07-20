@@ -75,9 +75,13 @@ export default function AgenticOpsDashboard() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Exposes action payload dispatch down onto endpoint paths on approve or reject state adjustments
+  // Exposes action payload dispatch down onto endpoint paths on approve or reject state adjustments
   const handleAction = async (isApproved: boolean) => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/agent/approve", {
+      // 🛠️ Updated to use environment variables dynamically
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://44.198.188.31:8000";
+      
+      const res = await fetch(`${baseUrl}/api/v1/agent/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,7 +93,6 @@ export default function AgenticOpsDashboard() {
       
       const result = await res.json();
       if (result.status === "completed") {
-        // Appends the updated output parameters derived upon post-evaluation
         setManualResolutionText(result.generated_recommendations);
       } else {
         setManualResolutionText(`❌ Execution rejected by administrator override.`);
@@ -100,7 +103,6 @@ export default function AgenticOpsDashboard() {
       setRequiresApproval(false);
     }
   };
-
   // Derives which agent is actively executing based on the active stream states
   const getActiveAgentNode = (): AgentNode => {
     if (requiresApproval) return 'AUDITOR'; // Anchor visually on audit step if wait states halt loop execution
