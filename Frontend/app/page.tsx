@@ -75,10 +75,8 @@ export default function AgenticOpsDashboard() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Exposes action payload dispatch down onto endpoint paths on approve or reject state adjustments
-  // Exposes action payload dispatch down onto endpoint paths on approve or reject state adjustments
-  const handleAction = async (isApproved: boolean) => {
+const handleAction = async (isApproved: boolean) => {
     try {
-      // 🛠️ Updated to use environment variables dynamically
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://44.198.188.31:8000";
       
       const res = await fetch(`${baseUrl}/api/v1/agent/approve`, {
@@ -92,8 +90,14 @@ export default function AgenticOpsDashboard() {
       });
       
       const result = await res.json();
-      if (result.status === "completed") {
-        setManualResolutionText(result.generated_recommendations);
+
+      if (isApproved && result.status === "completed") {
+        // Render generated playbook text returned by backend
+        setManualResolutionText(
+          result.generated_recommendations || 
+          result.output || 
+          "✅ Authorization Granted. Playbook deployed to cluster successfully."
+        );
       } else {
         setManualResolutionText(`❌ Execution rejected by administrator override.`);
       }

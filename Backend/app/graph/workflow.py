@@ -130,8 +130,8 @@ workflow.add_conditional_edges(
 )
 
 # Connect terminal paths
-workflow.add_edge("error_cleanup", END)
-workflow.add_edge("human_approval_gate", END) # Once approved, exit cleanly to END
+workflow.add_edge("human_approval_gate", "auditor")
+workflow.add_edge("auditor", END)
 
 # 4. Compile the Graph with Memory and State Interrupts
 memory = MemorySaver()
