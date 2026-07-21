@@ -4,7 +4,7 @@ A production-grade, autonomous B2B SaaS operational platform that ingests raw sy
 
 AgenticOps bridges infrastructure observability with multi-agent orchestration, transforming unformatted production crashes into safe, verifiable, and deployable customer recovery strategies in real time.
 
-Live Demo: https://agenticops-hazel.vercel.app ,
+Live Demo: https://agenticops-hazel.vercel.app 
 GitHub Repo: https://github.com/vivekbiju/AGENTICOPS-B2B-SAAS
 
 ## Table of Contents
@@ -38,7 +38,7 @@ To build an end-to-end multi-agent orchestration platform that evaluates infrast
 - **Matryoshka Representation Learning (MRL):** Compressed `gemini-embedding-2` outputs into 768-dimensional dense vectors to fit Elasticsearch basic tier constraints.
 - **Real-Time Asynchronous Streaming:** Built a FastAPI Server-Sent Event (SSE) gateway with custom stream simulation for fluid UI token rendering.
 - **Human-in-the-Loop Governance:** Integrated `MemorySaver` thread-isolated state checkpointing to pause execution on high-risk threats, allowing administrative overrides.
-- **Mathematical Benchmark Evaluation:** Configured a Ragas evaluation pipeline powered by `gemini-2.5-flash` to measure Context Precision ($1.0000$) and Faithfulness ($0.7650$).
+- **Mathematical Benchmark Evaluation:** Configured a Ragas evaluation pipeline powered by `gemini-3.5-flash` to measure Context Precision ($0.8500$) and Faithfulness ($0.7650$).
 - **Cloud IaC & Containerization:** Provisioned AWS EC2 infrastructure using Terraform and Docker Compose alongside a Next.js 14 Vercel deployment.
 
 
@@ -84,7 +84,6 @@ To build an end-to-end multi-agent orchestration platform that evaluates infrast
 - **AWS EC2** (Amazon Linux 2023 Backend Server)
 - **Git & GitHub**
 
----
 
 ## Architecture
 
@@ -94,7 +93,7 @@ To build an end-to-end multi-agent orchestration platform that evaluates infrast
                    AgenticOps End-to-End SaaS Platform
 
 ```
-
+```markdown
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            Next.js 14 UI Dashboard                           │
 │   - Multi-Agent Event Bus  - Dynamic Progress Pipeline - Live Markdown Stream│
@@ -176,8 +175,6 @@ PROJECT-6-AGENTICOPS/
 
 ```
 
----
-
 ## Database Design
 
 The primary Elasticsearch index, `client_footprints`, handles both historical metric snapshots and unstructured log fragments using a hybrid schema compliant with Elasticsearch 8.12:
@@ -211,8 +208,6 @@ The primary Elasticsearch index, `client_footprints`, handles both historical me
 
 ```
 
----
-
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -221,14 +216,12 @@ The primary Elasticsearch index, `client_footprints`, handles both historical me
 | `POST` | `/api/v1/agent/approve` | Resumes a paused LangGraph thread checkpoint following human approval |
 | `GET` | `/` | Health check endpoint returning microservice operational status |
 
----
-
 ## Installation
 
 ### Clone the Repository
 
 ```bash
-git clone [https://github.com/YOUR_USERNAME/PROJECT-6-AGENTICOPS.git](https://github.com/YOUR_USERNAME/PROJECT-6-AGENTICOPS.git)
+git clone [https://github.com/vivekbiju/AGENTICOPS-B2B-SAAS.git]
 cd PROJECT-6-AGENTICOPS
 
 ```
