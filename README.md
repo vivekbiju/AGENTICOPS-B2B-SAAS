@@ -1,17 +1,14 @@
-Here is a detailed **README.md** crafted specifically for your **AgenticOps** repository, matching your structure while filling in all the exact architecture, code paths, tech stack, and deployment details from our engineering session:
-
-```markdown
 # AgenticOps Control Center 🚀
 
 A production-grade, autonomous B2B SaaS operational platform that ingests raw system error logs, classifies incidents, retrieves contextual historical runbooks using hybrid vector search, evaluates customer churn risk, and streams audited remediation playbooks under strict Human-in-the-Loop (HITL) governance.
 
 AgenticOps bridges infrastructure observability with multi-agent orchestration, transforming unformatted production crashes into safe, verifiable, and deployable customer recovery strategies in real time.
 
-Live Demo: [https://agenticops-hazel.vercel.app](https://agenticops-hazel.vercel.app)  
-GitHub Repo: [https://github.com/YOUR_USERNAME/PROJECT-6-AGENTICOPS](https://github.com/YOUR_USERNAME/PROJECT-6-AGENTICOPS)
+Live Demo: https://agenticops-hazel.vercel.app
+GitHub Repo: https://github.com/vivekbiju/AGENTICOPS-B2B-SAAS
 
 ---
-
+```markdown
 ## Table of Contents
 
 - [Overview](#overview)
