@@ -342,12 +342,7 @@ The system was evaluated against a 20-case incident benchmark using **Ragas** po
 <img width="1646" height="498" alt="image" src="https://github.com/user-attachments/assets/251c7be4-5371-4fcc-937d-1e680d5279fe" />
 <img width="495" height="697" alt="image" src="https://github.com/user-attachments/assets/20b6bd8c-977b-424d-8795-6fe35248c858" />
 <img width="1677" height="547" alt="image" src="https://github.com/user-attachments/assets/32d1de99-7632-4264-bd28-05bc2b549ab8" />
-
-```
 <img width="495" height="697" alt="image" src="https://github.com/user-attachments/assets/1a6cbfd7-6b16-49dc-9b2e-c83147077711" />
-
-*Fig 1. Real-time multi-agent execution pipeline and streaming terminal interface.*
-
 
 ## Deployment
 
@@ -374,5 +369,5 @@ The system was evaluated against a 20-case incident benchmark using **Ragas** po
 
 ## License
 
-This project is licensed under the [MIT License](https://www.google.com/search?q=LICENSE).
+This project is licensed under the MIT.
 
